@@ -1,5 +1,8 @@
 # GREETER {{{
 command -v pfetch &>/dev/null && pfetch
+if [ -s "$HOME/.dotfiles/dot" ]; then
+  $($HOME/.dotfiles/dot sync -qd '12 hours' &)
+fi
 # }}}
 # VIRTUALENV {{{
 if ! [ -d "$HOME/.pyenv" ]; then

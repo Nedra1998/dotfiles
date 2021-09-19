@@ -1652,29 +1652,8 @@ function dot_sync() {
     git_pull_args="$git_pull_args --no-rebase"
   fi
 
-  if has git && exec $git_cmd pull $git_args $git_pull_args; then
-    linfo "Pulled dotfiles repo into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
-  else
-    lwarn "Failed to pull dotfiles into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
-    return 1
-  fi
-
   local pswd=""
-  if [ -s "${SCRIPT_DIR}/.encrypted" ] && has openssl && [ $LOG_LEVEL -lt 5 ]; then
-    linfo "Decrypting ${MAGENTA}ENCRYPTED/${RESET} directory"
-    read -rs -p "Enter password:" pswd
-    printf "\n"
-    exec openssl enc -aes-256-cbc -pass "pass:$pswd" -d -in "${SCRIPT_DIR}/.encrypted" -out "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
-    if [ -d "${SCRIPT_DIR}/ENCRYPTED" ]; then
-      exec rm -rf "${SCRIPT_DIR}/ENCRYPTED" || return 1
-    fi
-    exec tar xzf "${SCRIPT_DIR}/.encrypted.tar.gz" -C "${SCRIPT_DIR}" || return 1
-    exec rm "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
-  fi
-
-  if [ $SET == true ]; then
-    dot_set set 
-  fi
+  local should_push=true
 
   if [ -d "${SCRIPT_DIR}/ENCRYPTED" ] && has openssl && [ $LOG_LEVEL -lt 5 ]; then
     linfo "Encrypting ${MAGENTA}ENCRYPTED/${RESET} directory"
@@ -1701,16 +1680,47 @@ function dot_sync() {
 
   if [ -z "$(git -C "${SCRIPT_DIR}" status --porcelain)" ]; then
     linfo "No changes to be commited, no commit/push will be made"
-    return 0
+    should_push=false
   fi
 
-  exec $git_cmd add $git_args -A || return 1
-  exec $git_cmd commit $git_args -m "\"$(date "+%Y-%m-%d %H:%M:%S")\"" || return 1
-  if exec $git_cmd push $git_args; then
-    linfo "Pushed dotfile changes from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
-  elif [ $LOG_LEVEL -lt 5 ]; then
-    lwarn "Failed to push dotfiles from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+  if [ $should_push == true ]; then
+    exec $git_cmd add $git_args -A || return 1
+    exec $git_cmd commit $git_args -m "\"$(date "+%Y-%m-%d %H:%M:%S")\"" || return 1
+  fi
+
+  if has git && exec $git_cmd pull $git_args $git_pull_args; then
+    linfo "Pulled dotfiles repo into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+  else
+    lwarn "Failed to pull dotfiles into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
     return 1
+  fi
+
+  if [ -s "${SCRIPT_DIR}/.encrypted" ] && has openssl && [ $LOG_LEVEL -lt 5 ]; then
+    linfo "Decrypting ${MAGENTA}ENCRYPTED/${RESET} directory"
+    if [ -z "$pswd" ]; then
+      read -rs -p "Enter password:" pswd
+      printf "\n"
+    fi
+    printf "\n"
+    exec openssl enc -aes-256-cbc -pass "pass:$pswd" -d -in "${SCRIPT_DIR}/.encrypted" -out "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+    if [ -d "${SCRIPT_DIR}/ENCRYPTED" ]; then
+      exec rm -rf "${SCRIPT_DIR}/ENCRYPTED" || return 1
+    fi
+    exec tar xzf "${SCRIPT_DIR}/.encrypted.tar.gz" -C "${SCRIPT_DIR}" || return 1
+    exec rm "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+  fi
+
+  if [ $SET == true ]; then
+    dot_set set 
+  fi
+
+  if [ $should_push == true ]; then
+    if exec $git_cmd push $git_args; then
+      linfo "Pushed dotfile changes from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+    elif [ $LOG_LEVEL -lt 5 ]; then
+      lwarn "Failed to push dotfiles from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+      return 1
+    fi
   fi
 
   return 0

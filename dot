@@ -1,0 +1,1768 @@
+#!/bin/bash
+
+VERSION="3.0.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
+getopt -T >/dev/null
+if [ $? -ne 4 ]; then
+  echo "GNU enhanced getopt is required" >&2
+fi
+
+LONG_OPTIONS="help,version,verbose,no-verbose,quiet,no-quiet,color,no-color"
+SHORT_OPTIONS="hvVqcC"
+
+# HELP {{{
+
+function version() {
+  echo "dot v$VERSION"
+}
+
+function help_main() {
+  cat <<EOF
+Usage:
+  dot SUBCOMMAND [OPTIONS] ...
+
+Flags:
+  -h, --help            show list of command-line options
+  -V, --version         show version of 'dot'
+  -v, --[no-]verbose    enable trace & debug level log messages
+  -q, --[no-]quiet      suppress info & warning level messages, error messages 
+                          will still be enabled
+  -c, -C, --[no-]color  enable/disable colored output
+
+SubCommands:
+  add            add a new file/directory to the dotfiles
+  install        install the currently set dotfiles
+  list           display a list of all configured packages
+  remove         remove a file/directory from the dotfiles
+  set            create links for the missing dotfiles
+  tree           display a tree of all of the dependencies in a package
+  unset          remove links created for the dotfiles
+
+Git SubCommands:
+  pull           pulls and rebases from the git repo
+  push           commits and pushs any changes to the git repo
+  sync           pulls and pushes changes from the git repo
+EOF
+}
+
+function help_add() {
+  cat <<EOF
+Usage:
+  dot add [OPTIONS] PATH [PATH...]
+
+Add new files or directories into the dotfile management. This will move files
+and directories to the dotfiles directory, and create a new symbolic link in
+its place.
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+  -e, -E, --[no-]encrypt  add the new files as encrypted files into the package
+
+Options:
+  -p, --package PKG       the dotfile package to add the new files into
+EOF
+}
+
+function help_install() {
+  cat <<EOF
+Usage:
+  dot install [OPTIONS]
+
+<TODO>
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+
+Options:
+  -p, --package PKG       the dotfile package to add the new files into
+EOF
+}
+
+function help_list() {
+  cat <<EOF
+Usage:
+  dot list [OPTIONS]
+
+Create a list of files or packges that are managed as part of the dotfiles.
+This defaults to constructing a list based off the the provided packages, but
+by passing the '--all' flag it will construct a list for all available
+packages.
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+  -f, --files             list all the files instead of just package names
+  -b, --both              list both files and packages
+  -a, --all               list all packages/files not just dependencies of the
+                            current package.
+
+Options:
+  -p, --package PKG       the dotfile package to add the new files into
+EOF
+}
+
+function help_remove() {
+  cat <<EOF
+Usage:
+  dot remove [OPTIONS] PATH [PATH...]
+
+<TODO>
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+
+Options:
+  -p, --package PKG       the dotfile package to add the new files into
+EOF
+}
+
+function help_set() {
+  cat <<EOF
+Usage:
+  dot set [OPTIONS]
+
+<TODO>
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+EOF
+}
+
+function help_tree() {
+  cat <<EOF
+Usage:
+  dot tree [OPTIONS] [PACKAGE...]
+
+Generates a visual tree of all the dotfiles for a package. Each file in the
+tree will also contain additional information on the current status of the
+file. This will check if the destination file exists, if the destination file
+is correctly linked to the dotfile, if the dotfile exists, and if the
+destination file is an exact copy of the dotfile. Each of these cases is
+indicated by colors if enabled, or by the details string which can be enabled
+with '--details'.
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+  -d, --details           display additional details about the state of each
+                            dotfile
+EOF
+}
+
+function help_unset() {
+  cat <<EOF
+Usage:
+  dot unset [OPTIONS]
+
+<TODO>
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+EOF
+}
+
+function help_pull() {
+  cat <<EOF
+Usage:
+  dot pull [OPTIONS]
+
+Pulls from the remote git repository. This is equivalent to running 'git pull
+--rebase'. It also handles the decryption of any encrypted dotfiles, if not run
+in quiet mode, it will prompt the user for the password to use when decrypting
+the files.
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+  -r, -R, --[no-]rebase   configuring the merging method when running 'git pull'
+EOF
+}
+
+function help_push() {
+  cat <<EOF
+Usage:
+  dot push [OPTIONS]
+
+Commits and pushes any untracked changes to the remote git repository. This is
+mostly equivalent to running 'git push'. It will also handle the encryption of
+encrypted dotfiles. If not run in quiet mode it will prompt the user for a
+password to use for encrypting those files. It also ensures that the folder
+containg the encrypted dotfiles is included in the '.gitignore' for the
+dotfiles repo. If there are no untracked changes, then no commits will be made,
+and the command exits successfully.
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+EOF
+}
+
+function help_sync() {
+  cat <<EOF
+Usage:
+  dot sync [OPTIONS]
+
+This is a combination of 'dot pull' and 'dot push'. It will first pull any
+changes from the remote git repository, including decrypting the encrypted
+files. Then it will encrypt the encrypted files if present, and make a new
+commit including any untracked changes and push that to the git repository.
+
+If encrypted files are present in either the pull or the push phase, then the
+user will be prompted once to enter a password to use for the
+encrypted/decryption of those files. Unless the user has passed '-q'/'--quiet',
+in which case the encryption and decryption steps will be skipped.
+
+This command can also be used for automation, by passing the '--duration' flag
+with a minimum duration between syncs. Then this command will exit successfully
+if the last sync call was within that period. This is useful to place in a
+'.bashrc' or '.zshrc' as it will sync your dotfiles automatically when you open
+a new shell, but it won't run everytime, which will reduce noise in the git
+history, and startup time in the shell.
+
+>  \$(dot sync -qd '12 hours')
+
+Flags:
+  -h, --help              show list of command-line options
+  -V, --version           show version of 'dot'
+  -n, --dry               print what will be run, but don't actually run any
+                            commands
+  -v, --[no-]verbose      enable trace & debug level log messages
+  -q, --[no-]quiet        suppress info & warning level messages, error messages 
+                            will still be enabled
+  -c, -C, --[no-]color    enable/disable colored output
+  -r, -R, --[no-]rebase   configuring the merging method when running 'git pull'
+  -f, --force             force a sync even if the duration has not been met yet
+
+Options:
+  -d, --duration PERIOD   configure the minimum duration between sync runs
+EOF
+}
+
+function help() {
+  case "$1" in
+  version) version ;;
+  add | install | list | remove | set | tree | unset) help_$1 ;;
+  pull | push | sync) help_$1 ;;
+  *) help_main ;;
+  esac
+  exit 0
+}
+
+# }}}
+# COLOR {{{
+
+# TODO (arden): Implement LS_COLORS utility for applying the correct colors for
+# files and directories, without having to rely on ls/exa.
+
+ENABLE_COLOR=0
+if [ -t 0 ]; then ENABLE_COLOR=1; fi
+
+function color_reload() {
+  if [ $ENABLE_COLOR -eq 1 ]; then
+    RESET="\033[0m"
+    BOLD="\033[1m"
+    ITALIC="\033[2m"
+    UNDERLINE="\033[3m"
+
+    BLACK="\033[30m"
+    RED="\033[31m"
+    GREEN="\033[32m"
+    YELLOW="\033[33m"
+    BLUE="\033[34m"
+    MAGENTA="\033[35m"
+    CYAN="\033[36m"
+    WHITE="\033[37m"
+
+    BRIGHT_BLACK="\033[90m"
+    BRIGHT_RED="\033[91m"
+    BRIGHT_GREEN="\033[92m"
+    BRIGHT_YELLOW="\033[93m"
+    BRIGHT_BLUE="\033[94m"
+    BRIGHT_MAGENTA="\033[95m"
+    BRIGHT_CYAN="\033[96m"
+    BRIGHT_WHITE="\033[97m"
+
+    BLACK_BG="\033[40m"
+    RED_BG="\033[41m"
+    GREEN_BG="\033[42m"
+    YELLOW_BG="\033[43m"
+    BLUE_BG="\033[44m"
+    MAGENTA_BG="\033[45m"
+    CYAN_BG="\033[46m"
+    WHITE_BG="\033[47m"
+
+    BRIGHT_BLACK_BG="\033[100m"
+    BRIGHT_RED_BG="\033[101m"
+    BRIGHT_GREEN_BG="\033[102m"
+    BRIGHT_YELLOW_BG="\033[103m"
+    BRIGHT_BLUE_BG="\033[104m"
+    BRIGHT_MAGENTA_BG="\033[105m"
+    BRIGHT_CYAN_BG="\033[106m"
+    BRIGHT_WHITE_BG="\033[107m"
+  else
+    RESET=""
+    BOLD=""
+    ITALIC=""
+    UNDERLINE=""
+
+    BLACK=""
+    RED=""
+    GREEN=""
+    YELLOW=""
+    BLUE=""
+    MAGENTA=""
+    CYAN=""
+    WHITE=""
+
+    BRIGHT_BLACK=""
+    BRIGHT_RED=""
+    BRIGHT_GREEN=""
+    BRIGHT_YELLOW=""
+    BRIGHT_BLUE=""
+    BRIGHT_MAGENTA=""
+    BRIGHT_CYAN=""
+    BRIGHT_WHITE=""
+
+    BLACK_BG=""
+    RED_BG=""
+    GREEN_BG=""
+    YELLOW_BG=""
+    BLUE_BG=""
+    MAGENTA_BG=""
+    CYAN_BG=""
+    WHITE_BG=""
+
+    BRIGHT_BLACK_BG=""
+    BRIGHT_RED_BG=""
+    BRIGHT_GREEN_BG=""
+    BRIGHT_YELLOW_BG=""
+    BRIGHT_BLUE_BG=""
+    BRIGHT_MAGENTA_BG=""
+    BRIGHT_CYAN_BG=""
+    BRIGHT_WHITE_BG=""
+  fi
+}
+
+function color_ls() {
+  local file="$1"
+  if [ $ENABLE_COLOR == false ]; then
+    printf "%s" "$file"
+  else
+    printf "%s" "$file"
+  fi
+}
+
+# }}}
+# LOGGING {{{
+
+LOG_LEVEL=3
+
+function _log() {
+  LOG_FORMAT="${YELLOW}%T${RESET} [%^%L%$] (${CYAN}%f:%#${RESET}) %m"
+  local level=0
+  case "${1,,}" in
+  trace) level=1 ;;
+  debug) level=2 ;;
+  info) level=3 ;;
+  warn | warning) level=4 ;;
+  err | error) level=5 ;;
+  crit | critical | fatal) level=6 ;;
+  *) level=0 ;;
+  esac
+
+  if [ $level -ge $LOG_LEVEL ]; then
+    local level_str=""
+    local level_color=""
+    case "$level" in
+    1)
+      level_str="trace"
+      level_color="$BLUE"
+      ;;
+    2)
+      level_str="debug"
+      level_color="$MAGENTA"
+      ;;
+    3)
+      level_str="info"
+      level_color="$GREEN"
+      ;;
+    4)
+      level_str="warning"
+      level_color="$YELLOW"
+      ;;
+    5)
+      level_str="error"
+      level_color="$RED"
+      ;;
+    6)
+      level_str="critical"
+      level_color="$BOLD$RED"
+      ;;
+    esac
+    local time="$(date +%H:%M:%S)"
+    local file="$2"
+    local line="$3"
+    local msg="$(printf "$4" "${@:5}")"
+    local lline="$LOG_FORMAT"
+    lline="${lline//%T/$time}"
+    lline="${lline//%L/${level_str^^}}"
+    lline="${lline//%l/${level_str,,}}"
+    lline="${lline//%^/$level_color}"
+    lline="${lline//%$/$RESET}"
+    lline="${lline//%f/$file}"
+    lline="${lline//%#/$line}"
+    lline="${lline//%m/$msg}"
+    echo -e "$lline"
+  fi
+}
+
+function log() {
+  _log "$1" "${FUNCNAME[1]}" "${BASH_LINENO[0]}" "${@:2}"
+}
+function ltrace() {
+  _log "trace" "${FUNCNAME[1]}" "${BASH_LINENO[0]}" "$@"
+}
+function ldebug() {
+  _log "debug" "${FUNCNAME[1]}" "${BASH_LINENO[0]}" "$@"
+}
+function linfo() {
+  _log "info" "${FUNCNAME[1]}" "${BASH_LINENO[0]}" "$@"
+}
+function lwarn() {
+  _log "warn" "${FUNCNAME[1]}" "${BASH_LINENO[0]}" "$@"
+}
+function lerror() {
+  _log "err" "${FUNCNAME[1]}" "${BASH_LINENO[0]}" "$@"
+}
+function lcrit() {
+  _log "crit" "${FUNCNAME[1]}" "${BASH_LINENO[0]}" "$@"
+}
+
+# }}}
+# EXEC {{{
+
+DRY_RUN=false
+
+function has() {
+  if ! command -v "$@" &>/dev/null; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+function exec() {
+  ltrace "Running ${CYAN}$*${RESET}"
+
+  if [ $DRY_RUN == false ]; then
+    "$@" 1>/tmp/stdout 2>/tmp/stderr
+    local ret=$?
+    STDOUT=$(cat /tmp/stdout)
+    STDERR=$(cat /tmp/stderr)
+
+    if ! [ $ret -eq 0 ]; then
+      lwarn "${CYAN}$*${RESET} failed with error %d:\n  %s" $ret "$STDERR"
+    fi
+    return $ret
+  fi
+  return 0
+}
+
+# }}}
+# FILESYSTEM {{{
+
+function abspath() {
+  local path="$1"
+  if [ -h "$1" ]; then
+    path="$(realpath "$path")"
+  fi
+  if [[ "$path" =~ ^~/ ]]; then
+    path="${HOME}/${path:2}"
+  elif ! [[ "$path" =~ ^/ ]]; then
+    path="${PWD}/${path}"
+  fi
+
+  while [[ "$path" =~ /\.\./ ]]; do
+    path="$(echo "$path" | sed 's/\([^\/]\+\)\/\.\.\///g')"
+  done
+  echo "$path"
+}
+
+function install_path() {
+  local path="$1"
+  if [[ "$path" =~ ^$HOME/ ]]; then
+    local home_length=${#HOME}
+    home_length=$((home_length + 1))
+    path="~/${path:$home_length}"
+  fi
+  echo "$path"
+}
+
+function config_path() {
+  local path="$1"
+  local pkg="$2"
+  local encrypted="$3"
+  if [[ "$path" =~ ^$HOME/ ]]; then
+    local home_length=${#HOME}
+    home_length=$((home_length + 1))
+    path="${path:$home_length}"
+  else
+    path="ROOT${path}"
+  fi
+  if [ $encrypted == true ]; then
+    path="ENCRYPTED/$path"
+  fi
+
+  if [[ "$path" =~ ^\. ]]; then
+    path="${path:1}"
+  fi
+  path="${path//\/./\/}"
+
+  local dname="$(dirname "$path")"
+  local fname="$(basename "$path")"
+  if [ "$dname" == "." ]; then
+    echo "$pkg.$fname"
+  else
+    echo "$dname/$pkg.$fname"
+  fi
+}
+
+# }}}
+# CONFIG {{{
+
+CONFIG_FILE="$SCRIPT_DIR/dot.ini"
+
+declare -A PACKAGES
+function config_read() {
+  if ! [ -s "$CONFIG_FILE" ]; then
+    lwarn "Config file ${MAGENTA}%s${RESET} does not exist" "$CONFIG_FILE"
+  else
+    ltrace "Reading config file from ${MAGENTA}%s${RESET}" "$CONFIG_FILE"
+    local key=""
+    local val=""
+
+    while IFS= read -r line; do
+      line="${line%%;*}"
+      if [[ "$line" =~ ^\[(.*)\]$ ]]; then
+        if [ -n "$key" ]; then
+          PACKAGES[$key]="$val"
+        fi
+        key="${BASH_REMATCH[1]}"
+        val=""
+      else
+        val="$val;$line"
+      fi
+    done <"$CONFIG_FILE"
+    if [ -n "$key" ]; then
+      PACKAGES[$key]="$val"
+    fi
+  fi
+}
+
+function config_write_package() {
+  local pkg="$1"
+  printf "[$pkg]\n"
+
+  local sorted=($(config_keys "$pkg" | tr " " "\n" | sort))
+  for key in "${sorted[@]}"; do
+    printf "$key=$(config_get "$pkg" "$key")\n"
+  done
+}
+
+function config_write() {
+  ltrace "Writing config file to ${MAGENTA}%s${RESET}" "$CONFIG_FILE"
+  if ! [ -s "$CONFIG_FILE" ]; then
+    exec touch "$CONFIG_FILE"
+  fi
+  local sorted=($(echo "${!PACKAGES[*]}" | tr " " "\n" | sort))
+  local config=""
+
+  for pkg in "${sorted[@]}"; do
+    if ! [[ "$pkg" =~ ^host\/ ]]; then
+      continue
+    fi
+    config="$config$(config_write_package "$pkg")\n\n"
+  done
+
+  for pkg in "${sorted[@]}"; do
+    if ! [[ "$pkg" =~ ^group\/ ]]; then
+      continue
+    fi
+    config="$config$(config_write_package "$pkg")\n\n"
+  done
+
+  for pkg in "${sorted[@]}"; do
+    if ! [[ "$pkg" =~ ^package\/ ]]; then
+      continue
+    fi
+    config="$config$(config_write_package "$pkg")\n\n"
+  done
+
+  if [ "$DRY_RUN" == false ]; then
+    printf "$config" >"$CONFIG_FILE"
+  fi
+}
+
+function config_keys() {
+  local pkg="$1"
+
+  local package="${PACKAGES[$pkg]}"
+  local var_list
+  IFS=';' read -ra var_list <<<"$package"
+
+  local keys=""
+  for var in "${var_list[@]}"; do
+    if [ -z "$var" ]; then continue; fi
+    keys="$keys ${var%%=*}"
+  done
+  echo "$keys"
+}
+
+function config_get() {
+  local pkg="$1"
+
+  local package="${PACKAGES[$pkg]}"
+  local var_list
+  IFS=';' read -ra var_list <<<"$package"
+
+  for var in "${var_list[@]}"; do
+    if [ -z "$var" ]; then continue; fi
+    local key="${var%%=*}"
+    local val="${var#*=}"
+    if [ "$key" == "$2" ]; then
+      echo "$val"
+      break
+    fi
+  done
+}
+
+function config_set() {
+  local pkg="$1"
+
+  local package="${PACKAGES[$pkg]}"
+  local var_list
+  IFS=';' read -ra var_list <<<"$package"
+  package=""
+
+  local had_key=false
+  for var in "${var_list[@]}"; do
+    if [ -z "$var" ]; then continue; fi
+    local key="${var%%=*}"
+    if [ "$key" == "$2" ]; then
+      package="$package;$key=$3"
+      had_key=true
+    else
+      package="$package;$var"
+    fi
+  done
+
+  if [ $had_key == false ]; then
+    package="$package;$2=$3"
+  fi
+  PACKAGES[$pkg]="$package"
+}
+
+function config_append() {
+  local pkg="$1"
+  local key="$2"
+  local val="$3"
+
+  local config_val="$(config_get "$pkg" "$key")"
+  if [ -n "$config_val" ]; then
+    config_val="$config_val $val"
+  else
+    config_val="$val"
+  fi
+  config_set "$pkg" "$key" "$config_val"
+}
+
+function as_package() {
+  if [[ " ${!PACKAGES[*]} " =~ " $1 " ]]; then
+    echo "$1"
+  elif [[ " ${!PACKAGES[*]} " =~ " package/$1 " ]]; then
+    echo "package/$1"
+  elif [[ " ${!PACKAGES[*]} " =~ " group/$1 " ]]; then
+    echo "group/$1"
+  elif [[ " ${!PACKAGES[*]} " =~ " host/$1 " ]]; then
+    echo "host/$1"
+  fi
+}
+
+function as_package_always() {
+  if [[ " ${!PACKAGES[*]} " =~ " $1 " ]]; then
+    echo "$1"
+  elif [[ " ${!PACKAGES[*]} " =~ " package/$1 " ]]; then
+    echo "package/$1"
+  elif [[ " ${!PACKAGES[*]} " =~ " group/$1 " ]]; then
+    echo "group/$1"
+  elif [[ " ${!PACKAGES[*]} " =~ " host/$1 " ]]; then
+    echo "host/$1"
+  else
+    echo "package/$1"
+  fi
+}
+
+function package_list() {
+  local pkg="$1"
+  local packages="$2"
+
+  local depends=($(config_get "$pkg" "depends" | tr " " "\n" | sort))
+  for dep in "${depends[@]}"; do
+    if ! [[ " $packages " =~ " $dep " ]]; then
+      packages="$(package_list "$dep" "$packages $dep")"
+    fi
+  done
+  echo "$packages"
+}
+
+# }}}
+# ADD {{{
+
+function dot_add() {
+  local ENCRYPTED=false
+  local PACKAGE="host/$HOSTNAME"
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry,encrypt,no-encrypt,package:" --options "${SHORT_OPTIONS}neEp:" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "add" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -e | --encrypt) ENCRYPTED=true ;;
+    -E | --no-encrypt) ENCRYPTED=false ;;
+    -p | --package)
+      PACKAGE="$2"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  if ! [[ "$PACKAGE" =~ ^.*\/.* ]]; then
+    as_package_always "$PACKAGE"
+    PACKAGE="$(as_package_always "$PACKAGE")"
+  fi
+  local pkg="${PACKAGE##*\/}"
+
+  if [ $ENCRYPTED == true ]; then
+    linfo "Ensuring ${MAGENTA}ENCRYPTED/${RESET} is in dotfiles ${MAGENTA}.gitignore${RESET}"
+    if ! [ -s "$SCRIPT_DIR/.gitignore" ] && [ $DRY_RUN == false ]; then
+      echo "ENCRYPTED/" >"$SCRIPT_DIR/.gitignore"
+    elif ! grep -qL "ENCRYPTED/" "$SCRIPT_DIR/.gitignore" && [ $DRY_RUN == false ]; then
+      echo "ENCRYPTED/" >>"$SCRIPT_DIR/.gitignore"
+    fi
+  fi
+
+  while [ $# -ne 0 ]; do
+    local package_name="$(as_package "$1")"
+    if [ -f "$1" ] || [ -d "$1" ]; then
+      local path="$(abspath "$1")"
+      local install="$(install_path "$path")"
+      local config_base="$(config_path "$path" "$pkg" "$ENCRYPTED")"
+      local config="${SCRIPT_DIR}/$config_base"
+
+      if [ -e "$config" ]; then
+        lwarn "The file ${MAGENTA}%s${RESET} is already tracked in the dotfiles" "$install"
+        continue
+      fi
+      exec mv "$path" "$config"
+      exec ln -s "$config" "$path"
+      linfo "Added ${MAGENTA}$install${RESET} to ${CYAN}$PACKAGE${RESET}"
+      ltrace "Setting $config_base -> $install"
+      config_set "$PACKAGE" "$config_base" "$install"
+    elif [ -n "$package_name" ]; then
+      linfo "Added ${CYAN}$package_name${RESET} to ${CYAN}$PACKAGE${RESET}"
+      config_append "$PACKAGE" "depends" "$package_name"
+    else
+      lwarn "Ignoring argument ${GREEN}%s${RESET} it is not a file, directory, or package" "$1"
+    fi
+    shift
+  done
+  config_write
+
+  return 0
+}
+
+# }}}
+# INSTALL {{{
+
+function dot_install() {
+  local PACKAGE="host/$HOSTNAME"
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry,package:" --options "${SHORT_OPTIONS}np:" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "install" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -p | --package)
+      PACKAGE="$2"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  if ! [[ "$PACKAGE" =~ ^.*\/.* ]]; then
+    PACKAGE="$(as_package_always "$PACKAGE")"
+  fi
+  local packages="$(package_list "$PACKAGE" "$PACKAGE")"
+
+  for pkg in "${packages[@]}"; do
+    if [[ "$pkg" =~ ^host\/ ]]; then
+      linfo "Installing files for ${BOLD}${BLUE}%s${RESET}\n" "$pkg"
+    elif [[ "$pkg" =~ ^group\/ ]]; then
+      linfo "Installing files for ${BOLD}${YELLOW}%s${RESET}\n" "$pkg"
+    elif [[ "$pkg" =~ ^package\/ ]]; then
+      linfo "Installing files for ${BOLD}${MAGENTA}%s${RESET}\n" "$pkg"
+    fi
+
+    local sorted=($(config_keys "$pkg" | tr " " "\n" | sort))
+    for key in "${sorted[@]}"; do
+      if [ "$key" == "depends" ]; then continue; fi
+      local val="$(config_get "$pkg" "$key")"
+      local abs_path="$(abspath "$val")"
+      if [ -e "$abs_path" ] && [ "$(realpath "$abs_path")" == "${SCRIPT_DIR}/$key" ]; then
+        ltrace "Installing ${MAGNETA}%s${RESET} into ${MAGENTA}%s${RESET}" "${SCRIPT_DIR}/$key" "$abs_path"
+        exec rm "$abs_path"
+        exec cp -r "${SCRIPT_DIR}/$key" "$abs_path"
+      else
+        lwarn "Not installing ${MAGNETA}%s${RESET} into ${MAGENTA}%s${RESET} the destination is not a link to the dotfile" "${SCRIPT_DIR}/$key" "$abs_path"
+      fi
+    done
+  done
+
+  return 0
+}
+
+# }}}
+# LIST {{{
+
+function dot_list() {
+  local PACKAGE="host/$HOSTNAME"
+  local FILES=false
+  local BOTH=false
+  local ALL=false
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},package:,files,both,all" --options "${SHORT_OPTIONS}p:fba" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "list" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -f | --files) FILES=true ;;
+    -b | --both) BOTH=true ;;
+    -a | --all) ALL=true ;;
+    -p | --package)
+      PACKAGE="$2"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  if ! [[ "$PACKAGE" =~ ^.*\/.* ]]; then
+    PACKAGE="$(as_package_always "$PACKAGE")"
+  fi
+
+  local packages="${!PACKAGES[*]}"
+  if [ $ALL == false ]; then
+    packages="$(package_list "$PACKAGE" "$PACKAGE")"
+  fi
+
+  local packages=($(echo "$packages" | tr " " "\n" | sort))
+  for pkg in "${packages[@]}"; do
+    if [ $FILES == false ] || [ $BOTH == true ]; then
+      if [[ "$pkg" =~ ^host\/ ]]; then
+        printf "${BOLD}${BLUE}%s${RESET}\n" "$pkg"
+      elif [[ "$pkg" =~ ^group\/ ]]; then
+        printf "${BOLD}${YELLOW}%s${RESET}\n" "$pkg"
+      elif [[ "$pkg" =~ ^package\/ ]]; then
+        printf "${BOLD}${MAGENTA}%s${RESET}\n" "$pkg"
+      fi
+    fi
+    if [ $FILES == true ] || [ $BOTH == true ]; then
+      local sorted=($(config_keys "$pkg" | tr " " "\n" | sort))
+      for key in "${sorted[@]}"; do
+        if [ "$key" == "depends" ]; then continue; fi
+        local val="$(config_get "$pkg" "$key")"
+        local abs_path="$(abspath "$val")"
+        if [ $BOTH == true ]; then
+          printf "  %s\n" "$(color_ls "$abs_path")"
+        else
+          printf "%s\n" "$(color_ls "$abs_path")"
+        fi
+      done
+    fi
+  done
+
+  return 0
+}
+
+# }}}
+# REMOVE {{{
+
+function dot_remove() {
+  local PACKAGE="host/$HOSTNAME"
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry,package:" --options "${SHORT_OPTIONS}np:" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "remove" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -p | --package)
+      PACKAGE="$2"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  if ! [[ "$PACKAGE" =~ ^.*\/.* ]]; then
+    PACKAGE="$(as_package_always "$PACKAGE")"
+  fi
+  local pkg="${PACKAGE##*\/}"
+
+  color_reload
+  config_read
+
+  lerror "dot remove is still a work in progress"
+
+  return 1
+}
+
+# }}}
+# SET {{{
+
+function dot_set() {
+  local PACKAGE="host/$HOSTNAME"
+  local FORCE=false
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry,package:,force" --options "${SHORT_OPTIONS}np:f" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "set" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -f | --force) FORCE=true ;;
+    -p | --package)
+      PACKAGE="$2"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  if ! [[ "$PACKAGE" =~ ^.*\/.* ]]; then
+    PACKAGE="$(as_package_always "$PACKAGE")"
+  fi
+  local packages=($(package_list "$PACKAGE" "$PACKAGE" | tr " " "\n" | sort))
+
+  for pkg in "${packages[@]}"; do
+    if [[ "$pkg" =~ ^host\/ ]]; then
+      linfo "Setting links for ${BOLD}${BLUE}%s${RESET}\n" "$pkg"
+    elif [[ "$pkg" =~ ^group\/ ]]; then
+      linfo "Setting links for ${BOLD}${YELLOW}%s${RESET}\n" "$pkg"
+    elif [[ "$pkg" =~ ^package\/ ]]; then
+      linfo "Setting links for ${BOLD}${MAGENTA}%s${RESET}\n" "$pkg"
+    fi
+
+    local sorted=($(config_keys "$pkg" | tr " " "\n" | sort))
+    for key in "${sorted[@]}"; do
+      if [ "$key" == "depends" ]; then continue; fi
+      local val="$(config_get "$pkg" "$key")"
+      local abs_path="$(abspath "$val")"
+      local config="${SCRIPT_DIR}/$key"
+
+      if [ -e "$abs_path" ] && ! [ "$(realpath "$abs_path")" == "$config" ]; then
+        lwarn "Destination file ${MAGENTA}%s${RESET} already exists" "$abs_path"
+        if [ $LOG_LEVEL -lt 5 ]; then
+          while true; do
+            printf "Conflict - file already exists:\n  d) show diff\n  r) replace\n  b) backup and replace\n  s) skip (do nothing)\n"
+            read -r -n 1 -p ">>>" key
+            printf "\n"
+            case "$key" in
+              [Dd])
+                if has "colordiff"; then
+                  exec colordiff -u "$config" "$abs_path" && printf "$STDOUT\n"
+                elif has "diff"; then
+                  exec diff -u "$config" "$abs_path" && printf "$STDOUT\n"
+                fi
+                ;;
+              [Rr])
+                exec rm -rf -- "$abs_path"
+                exec ln -s "$config" "$abs_path"
+                linfo "Linked $abs_path to $config"
+                break
+                ;;
+              [Bb])
+                exec mv "$abs_path" "$abs_path$(date +'-%Y-%m-%d-%H%M%S.bak')"
+                exec ln -s "$config" "$abs_path"
+                linfo "Created a back of $abs_path, and linked $abs_path to $config"
+                break
+                ;;
+              [sSnNIi])
+                break;;
+              *) lwarn "Please respond with [drbs]"
+            esac
+          done
+        fi
+      elif ! [ -e "$abs_path" ]; then
+        if ! [ -d "$(dirname "$abs_path")" ]; then
+          exec mkdir -p "$(dirname "$abs_path")"
+        fi
+        exec ln -s "$config" "$abs_path"
+        linfo "Linked $abs_path to $config"
+      fi
+    done
+  done
+}
+
+# }}}
+# TREE {{{
+
+TREE_DETAILS=false
+
+function dot_tree_package() {
+  local pkg="$1"
+  local pkg_name="${pkg##*/}"
+  local depth="$2"
+  local initial_pipe="$3"
+  if [[ "$pkg" =~ ^host\/ ]]; then
+    printf "${initial_pipe}${BOLD}${BLUE}$pkg${RESET}\n"
+  elif [[ "$pkg" =~ ^group\/ ]]; then
+    printf "${initial_pipe}${BOLD}${YELLOW}$pkg${RESET}\n"
+  elif [[ "$pkg" =~ ^package\/ ]]; then
+    printf "${initial_pipe}${BOLD}${MAGENTA}$pkg${RESET}\n"
+  fi
+
+  if ! [[ " ${!PACKAGES[*]} " =~ " $pkg " ]]; then
+    printf "${initial_pipe}${BOLD}${RED}$pkg${RESET}\n"
+    return 1
+  fi
+
+  local sorted=($(config_keys "$pkg" | tr " " "\n" | sort))
+  local count="${#sorted[@]}"
+  for key in "${sorted[@]}"; do
+    if [ "$key" == "depends" ]; then continue; fi
+    local val="$(config_get "$pkg" "$key")"
+    local abs_path="$(abspath "$val")"
+
+    local pipe="├─"
+    local color=""
+    local msg=""
+
+    if [ $count -eq 1 ]; then
+      pipe="└─"
+    fi
+
+    val="$abs_path"
+    if [ -e "$abs_path" ]; then
+      if [ "$(realpath "$abs_path")" == "${SCRIPT_DIR}/$key" ]; then
+        color="${GREEN}"
+      elif ! [ -e "${SCRIPT_DIR}/$key" ]; then
+        color="${RED}"
+        msg="Destination file exists, but local dotfile does not."
+      elif ! diff "$abs_path" "${SCRIPT_DIR}/$key"; then
+        color="${YELLOW}"
+        msg="Destination file exists, but is not a link to the local dotfile."
+      else
+        color="${BLUE}"
+        msg="Destination file exists, and is a copy of the local dotfile."
+      fi
+    else
+      color="${RED}"
+      msg="Destination file does not exist."
+    fi
+
+    if [ $TREE_DETAILS == true ]; then
+      printf "${depth}${pipe} %s ${BOLD}${color}->${RESET} %s  ${BRIGHT_BLACK}%s${RESET}\n" "$key" "$val" "$msg"
+    else
+      printf "${depth}${pipe} %s ${BOLD}${color}->${RESET} %s\n" "$key" "$val"
+    fi
+
+    count=$((count - 1))
+  done
+
+  for key in "${sorted[@]}"; do
+    if ! [ "$key" == "depends" ]; then continue; fi
+
+    count=$((count - 1))
+    local deps_sorted=($(config_get "$pkg" "$key" | tr " " "\n" | sort))
+    local deps_count="${#deps_sorted[@]}"
+    count=$((count + deps_count))
+
+    for dep in "${deps_sorted[@]}"; do
+      local pipe="${depth}├─"
+      local pad="${depth}│ "
+
+      if [ $count -eq 1 ]; then
+        pipe="${depth}└─"
+        pad="${depth}  "
+      fi
+      dot_tree_package "$dep" "$pad" "$pipe"
+      count=$((count - 1))
+    done
+  done
+}
+
+function dot_tree() {
+  local PACKAGE="host/$HOSTNAME"
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},details" --options "${SHORT_OPTIONS}d" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "tree" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -d | --details) TREE_DETAILS=true ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  if [ $# -eq 0 ]; then
+    dot_tree_package "host/$HOSTNAME" " " " "
+  elif [ $# -eq 1 ] && [ -n "$(as_package "$1")" ]; then
+    dot_tree_package "$(as_package "$1")" " " " "
+  elif [ $# -eq 1 ]; then
+    dot_tree_package "$1" " " " "
+  else
+    printf " ${BOLD}Packages${RESET}\n"
+    while [ $# -ne 0 ]; do
+      local pipe=" ├─"
+      local prefix=" │ "
+      if [ $# -eq 1 ]; then
+        pipe=" └─"
+        prefix="   "
+      fi
+
+      local pkg="$(as_package "$1")"
+      if [ -n "$pkg" ]; then
+        dot_tree_package "$pkg" "$prefix" "$pipe"
+      else
+        dot_tree_package "$1" "$prefix" "$pipe"
+      fi
+      shift
+    done
+  fi
+
+  return 0
+}
+
+# }}}
+# UNSET {{{
+
+function dot_unset() {
+  local PACKAGE="host/$HOSTNAME"
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry,package:" --options "${SHORT_OPTIONS}np:" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "unset" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -p | --package)
+      PACKAGE="$2"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  if ! [[ "$PACKAGE" =~ ^.*\/.* ]]; then
+    PACKAGE="$(as_package_always "$PACKAGE")"
+  fi
+  local packages="$(package_list "$PACKAGE" "$PACKAGE")"
+
+  for pkg in "${packages[@]}"; do
+    if [[ "$pkg" =~ ^host\/ ]]; then
+      linfo "Unsetting links for ${BOLD}${BLUE}%s${RESET}\n" "$pkg"
+    elif [[ "$pkg" =~ ^group\/ ]]; then
+      linfo "Unsettting links for ${BOLD}${YELLOW}%s${RESET}\n" "$pkg"
+    elif [[ "$pkg" =~ ^package\/ ]]; then
+      linfo "Unsettting links for ${BOLD}${MAGENTA}%s${RESET}\n" "$pkg"
+    fi
+
+    local sorted=($(config_keys "$pkg" | tr " " "\n" | sort))
+    for key in "${sorted[@]}"; do
+      if [ "$key" == "depends" ]; then continue; fi
+      local val="$(config_get "$pkg" "$key")"
+      local abs_path="$(abspath "$val")"
+      if [ -e "$abs_path" ] && [ "$(realpath "$abs_path")" == "${SCRIPT_DIR}/$key" ]; then
+        ltrace "Unsetting link ${MAGENTA}%s${RESET}" "$abs_path"
+        exec rm "$abs_path"
+      fi
+    done
+  done
+
+  return 0
+}
+
+# }}}
+# PULL {{{
+
+function dot_pull() {
+  local REBASE=true
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry,rebase,no-rebase" --options "${SHORT_OPTIONS}nrR" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "pull" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -r | --rebase) REBASE=true ;;
+    -R | --no-rebase) REBASE=false ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  local git_cmd="git -C ${SCRIPT_DIR} pull"
+  if [ $LOG_LEVEL -eq 5 ]; then
+    git_cmd="$git_cmd --quiet"
+  elif [ $LOG_LEVEL -eq 1 ]; then
+    git_cmd="$git_cmd --verbose"
+  fi
+  if [ $DRY_RUN == true ]; then git_cmd="$git_cmd --dry-run"; fi
+  if [ $REBASE == true ]; then
+    git_cmd="$git_cmd --rebase"
+  else
+    git_cmd="$git_cmd --no-rebase"
+  fi
+
+  if has git && exec $git_cmd; then
+    linfo "Pulled dotfiles repo into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+  elif [ $LOG_LEVEL -lt 5 ]; then
+    lwarn "Failed to pull dotfiles into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+    return 1
+  fi
+
+  if [ -s "${SCRIPT_DIR}/.encrypted" ] && has openssl && [ $LOG_LEVEL -lt 5 ]; then
+    linfo "Decrypting ${MAGENTA}ENCRYPTED/${RESET} directory"
+    read -rs -p "Enter password:" pswd
+    printf "\n"
+    exec openssl enc -aes-256-cbc -pass "pass:$pswd" -d -in "${SCRIPT_DIR}/.encrypted" -out "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+    if [ -d "${SCRIPT_DIR}/ENCRYPTED" ]; then
+      exec rm -rf "${SCRIPT_DIR}/ENCRYPTED" || return 1
+    fi
+    exec tar xzf "${SCRIPT_DIR}/.encrypted.tar.gz" -C "${SCRIPT_DIR}" || return 1
+    exec rm "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+  fi
+
+  return 0
+}
+
+# }}}
+# PUSH {{{
+
+function dot_push() {
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry" --options "${SHORT_OPTIONS}n" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "push" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  local git_cmd="git -C ${SCRIPT_DIR}"
+  local git_args=""
+  if [ $LOG_LEVEL -eq 5 ]; then
+    git_args="$git_args --quiet"
+  elif [ $LOG_LEVEL -eq 1 ]; then
+    git_args="$git_args--verbose"
+  fi
+  if [ $DRY_RUN == true ]; then git_args="$git_args --dry-run"; fi
+
+  if [ -d "${SCRIPT_DIR}/ENCRYPTED" ] && has openssl && [ $LOG_LEVEL -lt 5 ]; then
+    linfo "Encrypting ${MAGENTA}ENCRYPTED/${RESET} directory"
+    read -rs -p "Enter password:" pswd
+    printf "\n"
+    exec tar czf "${SCRIPT_DIR}/.encrypted.tar.gz" -C "${SCRIPT_DIR}" "ENCRYPTED/" || return 1
+    if [ -e "${SCRIPT_DIR}/.encrypted" ]; then
+      exec rm -rf "${SCRIPT_DIR}/.encrypted" || return 1
+    fi
+    exec openssl enc -aes-256-cbc -pass "pass:$pswd" -e -in "${SCRIPT_DIR}/.encrypted.tar.gz" -out "${SCRIPT_DIR}/.encrypted" || return 1
+    exec rm "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+  fi
+
+  if [ -d "${SCRIPT_DIR}/ENCRYPTED" ]; then
+    linfo "Ensuring ${MAGENTA}ENCRYPTED/${RESET} is in dotfiles ${MAGENTA}.gitignore${RESET}"
+    if ! [ -s "$SCRIPT_DIR/.gitignore" ] && [ $DRY_RUN == false ]; then
+      echo "ENCRYPTED/" >"$SCRIPT_DIR/.gitignore"
+    elif ! grep -qL "ENCRYPTED/" "$SCRIPT_DIR/.gitignore" && [ $DRY_RUN == false ]; then
+      echo "ENCRYPTED/" >>"$SCRIPT_DIR/.gitignore"
+    fi
+  fi
+
+  if [ -z "$(git -C "${SCRIPT_DIR}" status --porcelain)" ]; then
+    linfo "No changes to be commited, no commit/push will be made"
+    return 0
+  fi
+
+  exec $git_cmd add $git_args -A || return 1
+  exec $git_cmd commit $git_args -m "$(date "+%Y-%m-%d %H:%M:%S")" || return 1
+  if exec $git_cmd push $git_args; then
+    linfo "Pushed dotfile changes from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+  elif [ $LOG_LEVEL -lt 5 ]; then
+    lwarn "Failed to push dotfiles from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+    return 1
+  fi
+
+  return 0
+}
+
+# }}}
+# SYNC {{{
+
+function dot_sync() {
+  local REBASE=true
+  local DURATION=""
+  local FORCE=false
+  local SET=true
+
+  local ARGS
+  ARGS=$(getopt --long "${LONG_OPTIONS},dry,rebase,no-rebase,duration:,force,no-set" --options "${SHORT_OPTIONS}nrRd:fS" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "sync" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    -n | --dry) DRY_RUN=true ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    -r | --rebase) REBASE=true ;;
+    -R | --no-rebase) REBASE=false ;;
+    -f | --force) FORCE=true ;;
+    -S | --no-set) SET=false ;;
+    -d | --duration)
+      DURATION="$(date --date "$2" "+%s")"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  shift
+
+  color_reload
+  config_read
+
+  if [ -n "$DURATION" ]; then
+    local now="$(date "+%s")"
+    DURATION=$((DURATION - now))
+    if [ -s "$SCRIPT_DIR/.synced" ]; then
+      local last_synced="$(cat "$SCRIPT_DIR/.synced")"
+      local offset=$((last_synced + DURATION))
+      if [ $offset -gt $now ] && [ $FORCE == false ]; then
+        lwarn "Last sync was ${BLUE}%s${RESET}, no syncing will be done" "$(date --date "@$last_synced")"
+        return 0
+      fi
+    fi
+    echo "$now" >"$SCRIPT_DIR/.synced"
+    linfo "Ensuring ${MAGENTA}.synced${RESET} is in dotfiles ${MAGENTA}.gitignore${RESET}"
+    if ! [ -s "$SCRIPT_DIR/.gitignore" ] && [ $DRY_RUN == false ]; then
+      echo ".synced" >"$SCRIPT_DIR/.gitignore"
+    elif ! grep -qL ".synced" "$SCRIPT_DIR/.gitignore" && [ $DRY_RUN == false ]; then
+      echo ".synced" >>"$SCRIPT_DIR/.gitignore"
+    fi
+  fi
+
+  local git_cmd="git -C ${SCRIPT_DIR}"
+  local git_args=""
+  local git_pull_args=""
+  if [ $LOG_LEVEL -eq 5 ]; then
+    git_args="$git_args --quiet"
+  elif [ $LOG_LEVEL -eq 1 ]; then
+    git_args="$git_args --verbose"
+  fi
+  if [ $DRY_RUN == true ]; then git_args="$git_args --dry-run"; fi
+  if [ $REBASE == true ]; then
+    git_pull_args="$git_pull_args --rebase"
+  else
+    git_pull_args="$git_pull_args --no-rebase"
+  fi
+
+  if has git && exec $git_cmd pull $git_args $git_pull_args; then
+    linfo "Pulled dotfiles repo into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+  else
+    lwarn "Failed to pull dotfiles into ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+    return 1
+  fi
+
+  local pswd=""
+  if [ -s "${SCRIPT_DIR}/.encrypted" ] && has openssl && [ $LOG_LEVEL -lt 5 ]; then
+    linfo "Decrypting ${MAGENTA}ENCRYPTED/${RESET} directory"
+    read -rs -p "Enter password:" pswd
+    printf "\n"
+    exec openssl enc -aes-256-cbc -pass "pass:$pswd" -d -in "${SCRIPT_DIR}/.encrypted" -out "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+    if [ -d "${SCRIPT_DIR}/ENCRYPTED" ]; then
+      exec rm -rf "${SCRIPT_DIR}/ENCRYPTED" || return 1
+    fi
+    exec tar xzf "${SCRIPT_DIR}/.encrypted.tar.gz" -C "${SCRIPT_DIR}" || return 1
+    exec rm "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+  fi
+
+  if [ $SET == true ]; then
+    dot_set set 
+  fi
+
+  if [ -d "${SCRIPT_DIR}/ENCRYPTED" ] && has openssl && [ $LOG_LEVEL -lt 5 ]; then
+    linfo "Encrypting ${MAGENTA}ENCRYPTED/${RESET} directory"
+    if [ -z "$pswd" ]; then
+      read -rs -p "Enter password:" pswd
+      printf "\n"
+    fi
+    exec tar czf "${SCRIPT_DIR}/.encrypted.tar.gz" -C "${SCRIPT_DIR}" "ENCRYPTED/" || return 1
+    if [ -e "${SCRIPT_DIR}/.encrypted" ]; then
+      exec rm -rf "${SCRIPT_DIR}/.encrypted" || return 1
+    fi
+    exec openssl enc -aes-256-cbc -pass "pass:$pswd" -e -in "${SCRIPT_DIR}/.encrypted.tar.gz" -out "${SCRIPT_DIR}/.encrypted" || return 1
+    exec rm "${SCRIPT_DIR}/.encrypted.tar.gz" || return 1
+  fi
+
+  if [ -d "${SCRIPT_DIR}/ENCRYPTED" ]; then
+    linfo "Ensuring ${MAGENTA}ENCRYPTED/${RESET} is in dotfiles ${MAGENTA}.gitignore${RESET}"
+    if ! [ -s "$SCRIPT_DIR/.gitignore" ] && [ $DRY_RUN == false ]; then
+      echo "ENCRYPTED/" >"$SCRIPT_DIR/.gitignore"
+    elif ! grep -qL "ENCRYPTED/" "$SCRIPT_DIR/.gitignore" && [ $DRY_RUN == false ]; then
+      echo "ENCRYPTED/" >>"$SCRIPT_DIR/.gitignore"
+    fi
+  fi
+
+  if [ -z "$(git -C "${SCRIPT_DIR}" status --porcelain)" ]; then
+    linfo "No changes to be commited, no commit/push will be made"
+    return 0
+  fi
+
+  exec $git_cmd add $git_args -A || return 1
+  exec $git_cmd commit $git_args -m "\"$(date "+%Y-%m-%d %H:%M:%S")\"" || return 1
+  if exec $git_cmd push $git_args; then
+    linfo "Pushed dotfile changes from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+  elif [ $LOG_LEVEL -lt 5 ]; then
+    lwarn "Failed to push dotfiles from ${MAGENTA}%s${RESET}" "$SCRIPT_DIR"
+    return 1
+  fi
+
+  return 0
+}
+
+# }}}
+# MAIN {{{
+
+function main() {
+  for arg in "$@"; do
+    if [[ "$arg" =~ ^- ]]; then
+      continue
+    elif [[ "$arg" =~ add|install|list|remove|set|tree|unset ]]; then
+      dot_$arg "$@"
+      return $?
+    elif [[ "$arg" =~ pull|push|sync ]]; then
+      dot_$arg "$@"
+      return $?
+    fi
+    break
+  done
+
+  local ARGS
+  ARGS=$(getopt --long "$LONG_OPTIONS" --options "$SHORT_OPTIONS" -- "$@")
+  if [ $? -ne 0 ]; then
+    echo "Usage error (use -h, --help for help)" >&2
+    return 1
+  fi
+  eval set -- "$ARGS"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    -h | --help) help "main" ;;
+    -V | --version) help "version" ;;
+    -v | --verbose) LOG_LEVEL=1 ;;
+    --no-verbose) LOG_LEVEL=3 ;;
+    -q | --quiet) LOG_LEVEL=5 ;;
+    --no-quiet) LOG_LEVEL=3 ;;
+    -c | --color) ENABLE_COLOR=1 ;;
+    -C | --no-color) ENABLE_COLOR=0 ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  color_reload
+
+  return 0
+}
+
+# }}}
+
+main "$@"
+exit $?
+# vim: foldmethod=marker foldlevel=0

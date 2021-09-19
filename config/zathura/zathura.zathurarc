@@ -1,0 +1,43 @@
+set selection-clipboard clipboard
+# Thema Begin -- one(dark) 
+set notification-error-bg       "#282c34" # bg
+set notification-error-fg       "#ff616e" # bright:red
+set notification-warning-bg     "#282c34" # bg
+set notification-warning-fg     "#f0a45d" # bright:yellow
+set notification-bg             "#282c34" # bg
+set notification-fg             "#a5e075" # bright:green
+
+set completion-bg               "#3e4451" # bg2
+set completion-fg               "#c8ccd4" # fg
+set completion-group-bg         "#353b45" # bg1
+set completion-group-fg         "#565c64" # gray
+set completion-highlight-bg     "#4dc4ff" # bright:blue
+set completion-highlight-fg     "#3e4451" # bg2
+
+# Define the color in index mode
+set index-bg                    "#3e4451" # bg2
+set index-fg                    "#c8ccd4" # fg
+set index-active-bg             "#4dc4ff" # bright:blue
+set index-active-fg             "#3e4451" # bg2
+
+set inputbar-bg                 "#282c34" # bg
+set inputbar-fg                 "#c8ccd4" # fg
+
+set statusbar-bg                "#3e4451" # bg2
+set statusbar-fg                "#c8ccd4" # fg
+
+set highlight-color             "#f0a45d" # bright:yellow
+set highlight-active-color      "#f0a45d" # bright:orange
+
+set default-bg                  "#282c34" # bg
+set default-fg                  "#c8ccd4" # fg
+set render-loading              true
+set render-loading-bg           "#282c34" # bg
+set render-loading-fg           "#c8ccd4" # fg
+
+# Recolor book content's color
+set recolor-lightcolor          "#282c34" # bg
+set recolor-darkcolor           "#c8ccd4" # fg
+set recolor                     "true"
+# set recolor-keephue             true      # keep original color
+# Thema End -- one(dark) 

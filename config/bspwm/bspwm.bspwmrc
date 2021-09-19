@@ -1,0 +1,60 @@
+#! /bin/sh
+
+! pgrep sxhkd && (sxhkd &) || (pkill -USR1 -x sxhkd)
+xsetroot -cursor_name left_ptr&
+
+polybar_bar="laptop"
+case "$(hostnamectl hostname)" in
+  "jupiter")
+    xrandr --output DisplayPort-1 --pos 0x0
+    xrandr --output DisplayPort-0 --pos 1920x0
+    xrandr --output DisplayPort-2 --pos 3840x0
+    bspc monitor DisplayPort-1 -d 4 5 6
+    bspc monitor DisplayPort-0 -d 1 2 3 10
+    bspc monitor DisplayPort-2 -d 7 8 9
+    polybar_bar="desktop"
+    ;;
+  *)
+    bspc monitor -d 1 2 3 4 5 6 7 8 9 10
+    polybar_bar="laptop"
+    ;;
+esac
+
+bspc config border_width 2
+bspc config window_gap   12
+
+bspc config split_ratio           0.52
+bspc config borderless_monocle    true
+bspc config gapless_monocle       true
+bspc config focus_follows_pointer true
+
+bspc rule -a mplayer2 state=floating
+bspc rule -a Kupfer.py focus=on
+bspc rule -a Screenkey manage=off
+
+bspc rule -a Alacritty:VimWiki-Note state=floating
+bspc rule -a Alacritty:VimWiki-Diary state=fullscreen
+
+killall -q polybar
+while pgrep -u $UID -x polybar >/dev/null; do sleep 1; done
+interface="$(ip link show | grep "state UP" | awk -F ' ' '{print $2}' | sed 's/.$//')"
+for monitor in $(xrandr --query | grep " connected" | cut -d" " -f1); do
+  MONITOR=$monitor INTERFACE=$interface polybar --reload $polybar_bar&
+done
+
+if command -v picom &>/dev/null; then 
+  picom &
+fi
+
+wallpaper="$(find "$HOME/Pictures/Wallpapers" -type f | shuf -n 1)"
+if [ -f "$wallpaper" ]; then
+  feh --bg-fill --conversion-time 1 "$wallpaper"
+elif [ -f "$HOME/Pictures/wallpaper/arch.svg" ]; then
+  feh --bg-fill --conversion-time 1 "$HOME/Pictures/wallpaper/arch.svg"
+fi
+# Thema Begin -- one(dark) 
+bspc config normal_border_color   "#353b45"
+bspc config active_border_color   "#545862"
+bspc config focused_border_color  "#4aa5f0"
+bspc config presel_feedback_color "#565c64"
+# Thema End -- one(dark) 

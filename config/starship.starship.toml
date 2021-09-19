@@ -1,0 +1,106 @@
+format = """
+$username$hostname$shlvl$directory\
+$git_branch$git_commit$git_state$git_status$hg_branch\
+$kubernetes$docker_context$aws$gcloud$package\
+$cmd_duration$line_break\
+$cmake$dart$dotnet$elixir$elm$erlang$golang$helm$java$julia$nim$nodejs$ocaml\
+$perl$php$purescript$python$ruby$rust$swift$terraform$zig$nix_shell$conda\
+$env_var$crystal\
+$jobs$character\
+"""
+add_newline = false
+scan_timeout = 10
+
+[username]
+format = "[$user]($style)"
+[hostname]
+format = "@[$hostname]($style) "
+[git_branch]
+format = "[$symbol$branch]($style) "
+[package]
+display_private = "true"
+symbol = " "
+format = "[$symbol$version]($style) "
+[cmd_duration]
+format = "[$duration]($style) "
+
+[aws]
+symbol = " "
+format = "[$symbol$profile(\\($region\\))]($style) "
+disabled = true
+[docker_context]
+symbol = " "
+format = "[$symbol$context]($style) "
+disabled = true
+[gcloud]
+symbol = " "
+format = "[$symbol$active(\\($region\\))]($style) "
+disabled = true
+[cmake]
+symbol = ""
+format = "[$symbol$version]($style) "
+[conda]
+symbol = "🅒 "
+format = "[$symbol$environment]($style) "
+[crystal]
+symbol = "CRYSTAL: "
+format = "[$symbol$version]($style) "
+[dart]
+symbol = " "
+format = "[$symbol$version]($style) "
+[dotnet]
+symbol = " "
+[elixir]
+symbol = " "
+format = "[$symbol$version \\(OTP $otp_version\\)]($style) "
+[elm]
+symbol = " "
+format = "[$symbol$version]($style) "
+[erlang]
+symbol = " "
+format = "[$symbol$version]($style) "
+[golang]
+symbol = " "
+format = "[$symbol$version]($style) "
+[helm]
+symbol = "⎈ "
+format = "[$symbol$version]($style) "
+[java]
+symbol = " "
+format = "[${symbol}${version}]($style) "
+[julia]
+symbol = " "
+format = "[$symbol$version]($style) "
+[nim]
+symbol = "NIM: "
+format = "[$symbol$version]($style) "
+[nodejs]
+symbol = " "
+format = "[$symbol$version]($style) "
+[ocaml]
+symbol = "OCAML: "
+format = "[$symbol$version]($style) "
+[perl]
+symbol = " "
+format = "[$symbol$version]($style) "
+[php]
+symbol = " "
+format = "[$symbol$version]($style) "
+[python]
+symbol = " "
+format = "[${symbol}${version}( \\($virtualenv\\))]($style) "
+[ruby]
+symbol = " "
+format = "[$symbol$version]($style) "
+[rust]
+symbol = " "
+format = "[$symbol$version]($style) "
+[swift]
+symbol = " "
+format = "[$symbol$version]($style) "
+[zig]
+symbol = "↯ "
+format = "[$symbol$version]($style) "
+[purescript]
+symbol = "<=> "
+format = "[$symbol$version]($style) "

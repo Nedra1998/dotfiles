@@ -845,6 +845,9 @@ function dot_add() {
         lwarn "The file ${MAGENTA}%s${RESET} is already tracked in the dotfiles" "$install"
         continue
       fi
+      if ! [ -d "$(dirname "$config")" ]; then
+        exec mkdir -p "$(dirname "$config")"
+      fi
       exec mv "$path" "$config"
       exec ln -s "$config" "$path"
       linfo "Added ${MAGENTA}$install${RESET} to ${CYAN}$PACKAGE${RESET}"

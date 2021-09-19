@@ -1,0 +1,35 @@
+# Thema Begin -- one(dark) 
+fzf_bg0='#282c34'
+fzf_bg1='#353b45'
+fzf_bg2='#3e4451'
+fzf_bg3='#545862'
+fzf_bg4='#565c64'
+fzf_fg4='#abb2bf'
+fzf_fg3='#abb2bf'
+fzf_fg2='#b6bdca'
+fzf_fg1='#c8ccd4'
+fzf_fg0='#e6e6e6'
+
+fzf_red='#e05561'
+fzf_green='#8cc265'
+fzf_yellow='#d19a66'
+fzf_blue='#4aa5f0'
+fzf_magenta='#c162de'
+fzf_cyan='#42b3c2'
+fzf_orange='#d19a66'
+
+fzf_brightRed='#ff616e'
+fzf_brightGreen='#a5e075'
+fzf_brightYellow='#f0a45d'
+fzf_brightBlue='#4dc4ff'
+fzf_brightMagenta='#de73ff'
+fzf_brightCyan='#4cd1e0'
+fzf_brightOrange='#f0a45d'
+# Thema End -- one(dark) 
+
+export FZF_DEFAULT_OPTS="$FZF_DEFAULT_OPTS"\
+" --color=bg+:-1,bg:-1,spinner:$fzf_cyan,hl:$fzf_blue"\
+" --color=fg:$fzf_fg2,header:$fzf_blue,info:$fzf_yellow,pointer:$fzf_cyan"\
+" --color=marker:$fzf_cyan,fg+:$fzf_fg1,prompt:$fzf_yellow,hl+:$fzf_blue"
+
+# vim: ft=bash

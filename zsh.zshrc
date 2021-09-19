@@ -1,7 +1,7 @@
 # GREETER {{{
 command -v pfetch &>/dev/null && pfetch
 if [ -s "$HOME/.dotfiles/dot" ]; then
-  $($HOME/.dotfiles/dot sync -qd '12 hours' &)
+  $HOME/.dotfiles/dot sync -qd '12 hours'
 fi
 # }}}
 # VIRTUALENV {{{

@@ -428,7 +428,8 @@ function _log() {
   *) level=0 ;;
   esac
 
-  if [ $level -ge $LOG_LEVEL ]; then
+  # if [ $level -ge $LOG_LEVEL ]; then
+  if [ 0 -eq 0 ]; then
     local level_str=""
     local level_color=""
     case "$level" in
@@ -1639,13 +1640,18 @@ function dot_sync() {
 
   local git_cmd="git -C ${SCRIPT_DIR}"
   local git_args=""
+  local git_add_args=""
   local git_pull_args=""
   if [ $LOG_LEVEL -eq 5 ]; then
     git_args="$git_args --quiet"
   elif [ $LOG_LEVEL -eq 1 ]; then
     git_args="$git_args --verbose"
+    git_add_args="$git_add_args --verbose"
   fi
-  if [ $DRY_RUN == true ]; then git_args="$git_args --dry-run"; fi
+  if [ $DRY_RUN == true ]; then
+    git_args="$git_args --dry-run"
+    git_add_args="$git_add_args --dry-run"
+  fi
   if [ $REBASE == true ]; then
     git_pull_args="$git_pull_args --rebase"
   else
@@ -1684,7 +1690,7 @@ function dot_sync() {
   fi
 
   if [ $should_push == true ]; then
-    exec $git_cmd add $git_args -A || return 1
+    exec $git_cmd add $git_add_args -A || return 1
     exec $git_cmd commit $git_args -m "\"$(date "+%Y-%m-%d %H:%M:%S")\"" || return 1
   fi
 

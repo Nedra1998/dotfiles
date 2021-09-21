@@ -428,8 +428,7 @@ function _log() {
   *) level=0 ;;
   esac
 
-  # if [ $level -ge $LOG_LEVEL ]; then
-  if [ 0 -eq 0 ]; then
+  if [ $level -ge $LOG_LEVEL ]; then
     local level_str=""
     local level_color=""
     case "$level" in

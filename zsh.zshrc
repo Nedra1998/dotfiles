@@ -1,10 +1,15 @@
 # GREETER {{{
 command -v pfetch &>/dev/null && pfetch
 if [ -s "$HOME/.dotfiles/dot" ]; then
-  $HOME/.dotfiles/dot sync -qd '12 hours'
+  $($HOME/.dotfiles/dot sync -qd '12 hours' &)
 fi
 # }}}
 # VIRTUALENV {{{
+
+if [ -e "$HOME/.keys" ]; then
+  source "$HOME/.keys"
+fi
+
 if ! [ -d "$HOME/.pyenv" ]; then
   git clone --quiet --depth=1 https://github.com/pyenv/pyenv.git $HOME/.pyenv
   git clone --quiet --depth=1 https://github.com/pyenv/pyenv-virtualenv.git $HOME/.pyenv/plugins/pyenv-virtualenv

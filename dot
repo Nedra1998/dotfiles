@@ -1690,7 +1690,7 @@ function dot_sync() {
 
   if [ $should_push == true ]; then
     exec $git_cmd add $git_add_args -A || return 1
-    exec $git_cmd commit $git_args -m "\"$(date "+%Y-%m-%d %H:%M:%S")\"" || return 1
+    exec $git_cmd commit $git_args -m "$(date "+%Y-%m-%d %H:%M:%S")" || return 1
   fi
 
   if has git && exec $git_cmd pull $git_args $git_pull_args; then
